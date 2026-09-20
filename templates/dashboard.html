@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SheShield - Emergency Dashboard</title>
     <link rel="manifest" href="/static/manifest.json">
+    
+    <!-- Leaflet CSS for Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
     <style>
         * {
             box-sizing: border-box;
@@ -107,16 +111,17 @@
             font-size: 1.1rem;
         }
 
-        .no-image-text {
-            color: #888888;
-            font-style: italic;
-            font-size: 1rem;
-            padding: 20px 0;
+        #map {
+            height: 250px;
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            margin-bottom: 12px;
         }
-        
+
         .gmaps-link {
             display: inline-block;
-            margin-top: 12px;
+            margin-top: 10px;
             padding: 10px 18px;
             background-color: #4285F4;
             color: #ffffff;
@@ -128,6 +133,13 @@
 
         .gmaps-link:hover {
             background-color: #3367d6;
+        }
+
+        .no-image-text {
+            color: #888888;
+            font-style: italic;
+            font-size: 1rem;
+            padding: 20px 0;
         }
 
         .attacker-img {
@@ -150,19 +162,23 @@
         System Normal - Monitoring Active
     </div>
 
-    <!-- Manual Trigger and Reset Controls -->
+    <!-- Controls -->
     <div class="btn-container">
         <button class="sos-btn" onclick="triggerWebSOS()">🚨 Trigger Manual SOS</button>
         <br>
         <button class="reset-btn" onclick="resetSOS()">Reset Alarm State</button>
     </div>
 
-    <!-- Live Google Maps Button -->
-    <a id="gmaps-btn" class="gmaps-link" href="#" target="_blank" style="display: none;">
-        🗺️ Open in Google Maps
-    </a>
+    <!-- Live Map Section -->
+    <div class="image-card">
+        <h3>📍 Live Victim Tracking</h3>
+        <div id="map"></div>
+        <a id="gmaps-btn" class="gmaps-link" href="#" target="_blank" style="display: none;">
+            🗺️ Open in Google Maps
+        </a>
+    </div>
 
-    <!-- Live Hardware Capture Section -->
+    <!-- Camera Capture Section -->
     <div class="image-card">
         <h3>Attacker Capture (ESP32-CAM)</h3>
         <div id="image-container">
@@ -172,15 +188,54 @@
     </div>
 </div>
 
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-    function updateGoogleMapsLink(lat, lng) {
+    // 1. Initialize Map
+    let map = L.map('map').setView([13.0827, 80.2707], 13);
+    let marker;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    function updateMapMarker(lat, lng) {
+        if (!marker) {
+            marker = L.marker([lat, lng]).addTo(map).bindPopup("<b>Victim Location</b>").openPopup();
+        } else {
+            marker.setLatLng([lat, lng]);
+        }
+        map.setView([lat, lng], 15);
+
+        // Update Google Maps Link Button
         const btn = document.getElementById('gmaps-btn');
         if (btn) {
-            btn.href = `https://www.google.com/maps?q=${lat},${lng}`;
+            btn.href = 'https://www.google.com/maps?q=' + lat + ',' + lng;
             btn.style.display = 'inline-block';
         }
     }
-    // Poll backend every 2 seconds for hardware button state and new photos
+
+    // 2. Fetch Live GPS from Mobile Browser
+    if ("geolocation" in navigator) {
+        navigator.geolocation.watchPosition(
+            function(pos) {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                updateMapMarker(lat, lng);
+
+                fetch('/update-location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat: lat, lng: lng })
+                }).catch(err => console.error("Error updating location:", err));
+            },
+            function(err) { console.warn("Location error:", err.message); },
+            { enableHighAccuracy: true }
+        );
+    }
+
+    // 3. Poll Backend
     function pollHardwareStatus() {
         fetch('/get_latest_status')
             .then(response => response.json())
@@ -189,7 +244,6 @@
                 const noImgText = document.getElementById('no-image-text');
                 const imgElement = document.getElementById('attacker-image');
 
-                // 1. Update SOS Alert Banner UI
                 if (data.sos_active) {
                     banner.innerText = "🚨 EMERGENCY SOS ACTIVATED!";
                     banner.classList.add("alert-active");
@@ -198,36 +252,36 @@
                     banner.classList.remove("alert-active");
                 }
 
-                // 2. Display camera image if ESP32-CAM uploaded a photo
                 if (data.image_url) {
                     noImgText.style.display = "none";
                     imgElement.style.display = "block";
-                    // Cache-busting timestamp parameter ensures immediate UI refresh
                     imgElement.src = data.image_url + '?t=' + new Date().getTime();
                 } else {
                     noImgText.style.display = "block";
                     imgElement.style.display = "none";
                 }
+
+                if (data.location && data.location.lat && data.location.lng) {
+                    updateMapMarker(data.location.lat, data.location.lng);
+                }
             })
-            .catch(err => console.error("Error fetching hardware status:", err));
+            .catch(err => console.error("Polling error:", err));
     }
 
-    // Trigger SOS manually from web dashboard
-   function triggerWebSOS() {
-    fetch('/trigger_sos', { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Web User', phone: 'Dashboard Trigger' })
-    })
-    .then(res => res.json())
-    .then(data => {
-        alert("Emergency SOS triggered! Telegram alerts sent.");
-        pollHardwareStatus();
-    })
-    .catch(err => console.error("Error triggering manual SOS:", err));
-}
+    function triggerWebSOS() {
+        fetch('/trigger_sos', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Web User', phone: 'Dashboard Trigger' })
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert("Emergency SOS triggered! Telegram alerts sent.");
+            pollHardwareStatus();
+        })
+        .catch(err => console.error("SOS trigger error:", err));
+    }
 
-    // Reset SOS State
     function resetSOS() {
         fetch('/reset_sos', { method: 'POST' })
             .then(res => res.json())
@@ -235,13 +289,10 @@
                 alert("SOS state reset.");
                 pollHardwareStatus();
             })
-            .catch(err => console.error("Error resetting SOS:", err));
+            .catch(err => console.error("Reset error:", err));
     }
 
-    // Start automated background polling every 2 seconds
     setInterval(pollHardwareStatus, 2000);
-
-    // Initial load check
     pollHardwareStatus();
 </script>
 
