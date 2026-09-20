@@ -3,66 +3,219 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SheShield Live Tracking Portal</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <title>SheShield - Emergency Dashboard</title>
+    <link rel="manifest" href="/static/manifest.json">
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 12px; background: #f4f6f9; }
-        .header { background: #800020; color: white; text-align: center; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; margin-bottom: 12px; }
-        .card { background: white; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        #map { height: 260px; width: 100%; border-radius: 6px; margin-bottom: 10px; }
-        .btn { display: block; background: #4285F4; color: white; text-align: center; padding: 10px; border-radius: 6px; text-decoration: none; font-weight: bold; }
-        .img-box { background: #f8f9fa; border: 2px dashed #ccc; text-align: center; padding: 20px; color: #777; border-radius: 6px; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+
+        .status-banner {
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #28a745;
+            color: white;
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            transition: background-color 0.3s ease;
+        }
+
+        .status-banner.alert-active {
+            background-color: #dc3545;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0.7; }
+        }
+
+        .btn-container {
+            margin: 20px 0;
+        }
+
+        .sos-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(220, 53, 69, 0.4);
+            transition: transform 0.2s, background-color 0.2s;
+            margin-bottom: 10px;
+        }
+
+        .sos-btn:hover {
+            background-color: #bd2130;
+            transform: scale(1.02);
+        }
+
+        .reset-btn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+
+        .reset-btn:hover {
+            background-color: #5a6268;
+        }
+
+        .image-card {
+            border: 2px dashed #cccccc;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 25px;
+            background-color: #fafafa;
+        }
+
+        .image-card h3 {
+            margin-bottom: 15px;
+            color: #495057;
+            font-size: 1.1rem;
+        }
+
+        .no-image-text {
+            color: #888888;
+            font-style: italic;
+            font-size: 1rem;
+            padding: 20px 0;
+        }
+
+        .attacker-img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            border: 3px solid #dc3545;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            display: none;
+        }
     </style>
 </head>
 <body>
-    <div class="header">SheShield Live Tracking Portal</div>
 
-    <div class="card">
-        <h3 style="margin-top:0; color:#800020;">📍 Live Location</h3>
-        <div id="map"></div>
-        <a id="gmaps-btn" href="#" target="_blank" class="btn">🗺️ View in Google Maps</a>
+<div class="container">
+    <h1>SheShield Emergency Dashboard</h1>
+
+    <!-- Live SOS Status Banner -->
+    <div id="sos-status-banner" class="status-banner">
+        System Normal - Monitoring Active
     </div>
 
-    <div class="card">
-        <h3 style="margin-top:0; color:#800020;">📸 Image of the Attacker</h3>
-        <div class="img-box">No image attached as of now</div>
+    <!-- Manual Trigger and Reset Controls -->
+    <div class="btn-container">
+        <button class="sos-btn" onclick="triggerWebSOS()">🚨 Trigger Manual SOS</button>
+        <br>
+        <button class="reset-btn" onclick="resetSOS()">Reset Alarm State</button>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        let map, marker;
+    <!-- Live Hardware Capture Section -->
+    <div class="image-card">
+        <h3>Attacker Capture (ESP32-CAM)</h3>
+        <div id="image-container">
+            <p id="no-image-text" class="no-image-text">No image as of now</p>
+            <img id="attacker-image" class="attacker-img" src="" alt="Attacker Snapshot">
+        </div>
+    </div>
+</div>
 
-        // 1. Get exact live GPS coordinates from the device browser
-        if ("geolocation" in navigator) {
-            navigator.geolocation.watchPosition((pos) => {
-                const lat = pos.coords.latitude;
-                const lng = pos.coords.longitude;
+<script>
+    // Poll backend every 2 seconds for hardware button state and new photos
+    function pollHardwareStatus() {
+        fetch('/get_latest_status')
+            .then(response => response.json())
+            .then(data => {
+                const banner = document.getElementById('sos-status-banner');
+                const noImgText = document.getElementById('no-image-text');
+                const imgElement = document.getElementById('attacker-image');
 
-                // Send live coordinates to Flask server
-                fetch('/update-location', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lat: lat, lng: lng })
-                });
-
-                // Initialize map on first GPS read
-                if (!map) {
-                    map = L.map('map').setView([lat, lng], 16);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-                    marker = L.marker([lat, lng]).addTo(map).bindPopup("<b>🚨 Victim Live Location</b>").openPopup();
+                // 1. Update SOS Alert Banner UI
+                if (data.sos_active) {
+                    banner.innerText = "🚨 EMERGENCY SOS ACTIVATED!";
+                    banner.classList.add("alert-active");
                 } else {
-                    map.setView([lat, lng], 16);
-                    marker.setLatLng([lat, lng]);
+                    banner.innerText = "System Normal - Monitoring Active";
+                    banner.classList.remove("alert-active");
                 }
 
-                // Update Google Maps dynamic direction link
-                document.getElementById("gmaps-btn").href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-            }, 
-            (err) => console.error("GPS Error:", err.message), 
-            { enableHighAccuracy: true, maximumAge: 0 });
-        } else {
-            alert("Geolocation is not supported by your browser.");
-        }
-    </script>
+                // 2. Display camera image if ESP32-CAM uploaded a photo
+                if (data.image_url) {
+                    noImgText.style.display = "none";
+                    imgElement.style.display = "block";
+                    // Cache-busting timestamp parameter ensures immediate UI refresh
+                    imgElement.src = data.image_url + '?t=' + new Date().getTime();
+                } else {
+                    noImgText.style.display = "block";
+                    imgElement.style.display = "none";
+                }
+            })
+            .catch(err => console.error("Error fetching hardware status:", err));
+    }
+
+    // Trigger SOS manually from web dashboard
+    function triggerWebSOS() {
+        fetch('/trigger_sos', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Web User', phone: 'Dashboard Trigger' })
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert("Emergency SOS triggered! Telegram alerts sent.");
+            pollHardwareStatus();
+        })
+        .catch(err => console.error("Error triggering manual SOS:", err));
+    }
+
+    // Reset SOS State
+    function resetSOS() {
+        fetch('/reset_sos', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                alert("SOS state reset.");
+                pollHardwareStatus();
+            })
+            .catch(err => console.error("Error resetting SOS:", err));
+    }
+
+    // Start automated background polling every 2 seconds
+    setInterval(pollHardwareStatus, 2000);
+
+    // Initial load check
+    pollHardwareStatus();
+</script>
+
 </body>
 </html>
