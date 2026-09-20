@@ -185,19 +185,19 @@
     }
 
     // Trigger SOS manually from web dashboard
-    function triggerWebSOS() {
-        fetch('/trigger_sos', { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: 'Web User', phone: 'Dashboard Trigger' })
-        })
-        .then(res => res.json())
-        .then(data => {
-            alert("Emergency SOS triggered! Telegram alerts sent.");
-            pollHardwareStatus();
-        })
-        .catch(err => console.error("Error triggering manual SOS:", err));
-    }
+   function triggerWebSOS() {
+    fetch('/trigger_sos', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Web User', phone: 'Dashboard Trigger' })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("Emergency SOS triggered! Telegram alerts sent.");
+        pollHardwareStatus();
+    })
+    .catch(err => console.error("Error triggering manual SOS:", err));
+}
 
     // Reset SOS State
     function resetSOS() {

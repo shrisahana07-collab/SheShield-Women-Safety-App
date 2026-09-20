@@ -76,7 +76,7 @@ def get_location():
 def trigger_sos():
     global sos_active_state
     sos_active_state = True
-
+    
     data = request.get_json(silent=True) or {}
     victim_name = data.get('name', 'Victim')
     victim_phone = data.get('phone', 'Not Provided')
