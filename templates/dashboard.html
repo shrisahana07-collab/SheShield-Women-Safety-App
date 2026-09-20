@@ -5,10 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SheShield - Emergency Dashboard</title>
     <link rel="manifest" href="/static/manifest.json">
-    
-    <!-- Leaflet CSS for Live Location Map -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
     <style>
         * {
             box-sizing: border-box;
@@ -97,28 +93,6 @@
             background-color: #5a6268;
         }
 
-        /* Leaflet Map Styles */
-        .map-card {
-            margin-top: 25px;
-            text-align: left;
-        }
-
-        .map-card h3 {
-            margin-bottom: 10px;
-            color: #495057;
-            font-size: 1.1rem;
-            text-align: center;
-        }
-
-        #map {
-            height: 300px;
-            width: 100%;
-            border-radius: 10px;
-            border: 2px solid #ddd;
-            z-index: 1;
-        }
-
-        /* Camera Capture Section Styles */
         .image-card {
             border: 2px dashed #cccccc;
             padding: 20px;
@@ -167,12 +141,6 @@
         <button class="reset-btn" onclick="resetSOS()">Reset Alarm State</button>
     </div>
 
-    <!-- Live Map Section -->
-    <div class="map-card">
-        <h3>📍 Live Victim Tracking</h3>
-        <div id="map"></div>
-    </div>
-
     <!-- Live Hardware Capture Section -->
     <div class="image-card">
         <h3>Attacker Capture (ESP32-CAM)</h3>
@@ -183,55 +151,8 @@
     </div>
 </div>
 
-<!-- Leaflet JS Library -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script>
-    // --- 1. Map Initialization ---
-    // Default center (Chennai coords fallback)
-    let map = L.map('map').setView([13.0827, 80.2707], 13);
-    let marker;
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    // --- 2. Live Location Tracking & Updates ---
-    function sendLocationToServer(lat, lng) {
-        fetch('/update-location', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat: lat, lng: lng })
-        }).catch(err => console.error("Error updating location:", err));
-    }
-
-    function updateMapMarker(lat, lng) {
-        if (!marker) {
-            marker = L.marker([lat, lng]).addTo(map)
-                .bindPopup("<b>Victim Location</b>").openPopup();
-        } else {
-            marker.setLatLng([lat, lng]);
-        }
-        map.setView([lat, lng], 15);
-    }
-
-    // Geolocation API to fetch user's live position from browser
-    if ("geolocation" in navigator) {
-        navigator.geolocation.watchPosition(
-            (position) => {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                updateMapMarker(lat, lng);
-                sendLocationToServer(lat, lng);
-            },
-            (error) => {
-                console.warn("Geolocation warning:", error.message);
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    }
-
-    // --- 3. Polling Hardware & Alarm Status ---
+    // Poll backend every 2 seconds for hardware button state and new photos
     function pollHardwareStatus() {
         fetch('/get_latest_status')
             .then(response => response.json())
@@ -240,7 +161,7 @@
                 const noImgText = document.getElementById('no-image-text');
                 const imgElement = document.getElementById('attacker-image');
 
-                // Update SOS Alert Banner UI
+                // 1. Update SOS Alert Banner UI
                 if (data.sos_active) {
                     banner.innerText = "🚨 EMERGENCY SOS ACTIVATED!";
                     banner.classList.add("alert-active");
@@ -249,38 +170,34 @@
                     banner.classList.remove("alert-active");
                 }
 
-                // Display camera image if ESP32-CAM uploaded a photo
+                // 2. Display camera image if ESP32-CAM uploaded a photo
                 if (data.image_url) {
                     noImgText.style.display = "none";
                     imgElement.style.display = "block";
+                    // Cache-busting timestamp parameter ensures immediate UI refresh
                     imgElement.src = data.image_url + '?t=' + new Date().getTime();
                 } else {
                     noImgText.style.display = "block";
                     imgElement.style.display = "none";
-                }
-
-                // If backend has saved location from device, sync map view
-                if (data.location && data.location.lat && data.location.lng) {
-                    updateMapMarker(data.location.lat, data.location.lng);
                 }
             })
             .catch(err => console.error("Error fetching hardware status:", err));
     }
 
     // Trigger SOS manually from web dashboard
-    function triggerWebSOS() {
-        fetch('/trigger_sos', { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: 'Web User', phone: 'Dashboard Trigger' })
-        })
-        .then(res => res.json())
-        .then(data => {
-            alert("Emergency SOS triggered! Telegram alerts sent.");
-            pollHardwareStatus();
-        })
-        .catch(err => console.error("Error triggering manual SOS:", err));
-    }
+   function triggerWebSOS() {
+    fetch('/trigger_sos', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Web User', phone: 'Dashboard Trigger' })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("Emergency SOS triggered! Telegram alerts sent.");
+        pollHardwareStatus();
+    })
+    .catch(err => console.error("Error triggering manual SOS:", err));
+}
 
     // Reset SOS State
     function resetSOS() {
@@ -293,10 +210,10 @@
             .catch(err => console.error("Error resetting SOS:", err));
     }
 
-    // Start background polling every 2 seconds
+    // Start automated background polling every 2 seconds
     setInterval(pollHardwareStatus, 2000);
 
-    // Initial check on page load
+    // Initial load check
     pollHardwareStatus();
 </script>
 
