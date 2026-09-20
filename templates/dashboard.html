@@ -113,6 +113,22 @@
             font-size: 1rem;
             padding: 20px 0;
         }
+        
+        .gmaps-link {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 10px 18px;
+            background-color: #4285F4;
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: bold;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }
+
+        .gmaps-link:hover {
+            background-color: #3367d6;
+        }
 
         .attacker-img {
             max-width: 100%;
@@ -141,6 +157,11 @@
         <button class="reset-btn" onclick="resetSOS()">Reset Alarm State</button>
     </div>
 
+    <!-- Live Google Maps Button -->
+    <a id="gmaps-btn" class="gmaps-link" href="#" target="_blank" style="display: none;">
+        🗺️ Open in Google Maps
+    </a>
+
     <!-- Live Hardware Capture Section -->
     <div class="image-card">
         <h3>Attacker Capture (ESP32-CAM)</h3>
@@ -152,6 +173,13 @@
 </div>
 
 <script>
+    function updateGoogleMapsLink(lat, lng) {
+        const btn = document.getElementById('gmaps-btn');
+        if (btn) {
+            btn.href = `https://www.google.com/maps?q=${lat},${lng}`;
+            btn.style.display = 'inline-block';
+        }
+    }
     // Poll backend every 2 seconds for hardware button state and new photos
     function pollHardwareStatus() {
         fetch('/get_latest_status')
