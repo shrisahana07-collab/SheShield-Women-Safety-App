@@ -1,0 +1,21 @@
+# Secret Keys & Environment Variables
+.env
+
+# Python Cache & Compiled Files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environments
+venv/
+env/
+.venv/
+
+# IDE & Editor Settings
+.vscode/
+.idea/
+
+# OS Specific Files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SheShield Live Tracking Portal</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 12px; background: #f4f6f9; }
+        .header { background: #800020; color: white; text-align: center; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; margin-bottom: 12px; }
+        .card { background: white; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #map { height: 260px; width: 100%; border-radius: 6px; margin-bottom: 10px; }
+        .btn { display: block; background: #4285F4; color: white; text-align: center; padding: 10px; border-radius: 6px; text-decoration: none; font-weight: bold; }
+        .img-box { background: #f8f9fa; border: 2px dashed #ccc; text-align: center; padding: 20px; color: #777; border-radius: 6px; }
+    </style>
+</head>
+<body>
+    <div class="header">SheShield Live Tracking Portal</div>
+
+    <div class="card">
+        <h3 style="margin-top:0; color:#800020;">📍 Live Location</h3>
+        <div id="map"></div>
+        <a id="gmaps-btn" href="#" target="_blank" class="btn">🗺️ View in Google Maps</a>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top:0; color:#800020;">📸 Image of the Attacker</h3>
+        <div class="img-box">No image attached as of now</div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map, marker;
+
+        // 1. Get exact live GPS coordinates from the device browser
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition((pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+
+                // Send live coordinates to Flask server
+                fetch('/update-location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat: lat, lng: lng })
+                });
+
+                // Initialize map on first GPS read
+                if (!map) {
+                    map = L.map('map').setView([lat, lng], 16);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                    marker = L.marker([lat, lng]).addTo(map).bindPopup("<b>🚨 Victim Live Location</b>").openPopup();
+                } else {
+                    map.setView([lat, lng], 16);
+                    marker.setLatLng([lat, lng]);
+                }
+
+                // Update Google Maps dynamic direction link
+                document.getElementById("gmaps-btn").href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+            }, 
+            (err) => console.error("GPS Error:", err.message), 
+            { enableHighAccuracy: true, maximumAge: 0 });
+        } else {
+            alert("Geolocation is not supported by your browser.");
+        }
+    </script>
+</body>
+</html>

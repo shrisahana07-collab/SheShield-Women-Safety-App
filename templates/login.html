@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SheShield</title>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <style>
+        body { font-family: sans-serif; background: #f4f6f9; display: flex; justify-content: center; padding: 20px; margin: 0; }
+        .card { background: #fff; width: 100%; max-width: 360px; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px #0001; border-top: 5px solid #7b1fa2; text-align: center; }
+        input { width: 100%; padding: 8px; margin: 5px 0 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        .btn { width: 100%; background: #7b1fa2; color: #fff; padding: 10px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        .btn-green { background: #28a745; margin-bottom: 10px; }
+        .btn-sos { background: #d9534f; padding: 14px; font-size: 1.1rem; margin-top: 15px; }
+        .hidden { display: none; }
+        small { color: #666; display: block; margin-bottom: 5px; text-align: left; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <!-- PWA Install Button -->
+        <button id="install-btn" class="btn btn-green hidden">📲 Install App</button>
+        <h2 style="color: #7b1fa2; margin-top: 0;">SheShield</h2>
+        
+        <!-- Login Form -->
+        <form id="login-form">
+            <h3>Login Details</h3>
+            <input type="text" id="name" placeholder="User Name" required>
+            <input type="tel" id="phone" placeholder="Phone Number" required>
+            <button class="btn" type="submit">Next ➔</button>
+        </form>
+
+        <!-- Emergency Contacts Panel -->
+        <div id="contacts-panel" class="hidden">
+            <p>Welcome, <b id="d-name"></b></p>
+            <small>Emergency Contact Telegram Chat IDs:</small>
+            
+            <div id="contacts-list"></div>
+            
+            <button class="btn" onclick="addContactField('')" style="background:#6c757d; margin-top:5px">+ Add Contact</button>
+            <button id="sos" class="btn btn-sos">🚨 TRIGGER SOS</button>
+            
+            <p style="margin-top: 15px;">
+                <a href="#" onclick="logout()" style="color: #666; font-size: 0.8rem;">Change User Details</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let installPrompt;
+
+        // Capture PWA Install Event & Show Install Button
+        window.addEventListener('beforeinstallprompt', e => {
+            e.preventDefault();
+            installPrompt = e;
+            document.getElementById('install-btn').classList.remove('hidden');
+        });
+
+        // Trigger Install Prompt on Button Click
+        document.getElementById('install-btn').onclick = async () => {
+            if (installPrompt) {
+                installPrompt.prompt();
+                const { outcome } = await installPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    document.getElementById('install-btn').classList.add('hidden');
+                }
+                installPrompt = null;
+            }
+        };
+
+        const addContactField = (val = '') => {
+            const input = document.createElement('input'); 
+            input.type = 'text'; 
+            input.className = 'telegram-contact-input'; 
+            input.value = val; 
+            input.placeholder = 'Telegram Chat ID (e.g. 7522780948)';
+            document.getElementById('contacts-list').appendChild(input);
+        };
+
+        const loadContactsPage = (user) => {
+            document.getElementById('d-name').innerText = user.name;
+            document.getElementById('contacts-list').innerHTML = '';
+            
+            const savedContacts = JSON.parse(localStorage.getItem('sos_contacts') || '[]');
+            (savedContacts.length ? savedContacts : ['']).forEach(addContactField);
+
+            const sosBtn = document.getElementById('sos');
+            sosBtn.style.background = '#d9534f'; 
+            sosBtn.innerText = '🚨 TRIGGER SOS'; 
+            sosBtn.disabled = false;
+
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('contacts-panel').classList.remove('hidden');
+        };
+
+        window.onload = () => {
+            const savedUser = JSON.parse(localStorage.getItem('user_details'));
+            if (savedUser) loadContactsPage(savedUser);
+        };
+
+        // Handle First-Time Form Submission -> Go to Guidelines
+        document.getElementById('login-form').onsubmit = (e) => {
+            e.preventDefault();
+            const user = { 
+                name: document.getElementById('name').value.trim(), 
+                phone: document.getElementById('phone').value.trim() 
+            };
+            
+            localStorage.setItem('user_details', JSON.stringify(user));
+            window.location.href = '/instructions';
+        };
+
+        // Handle SOS Trigger Button
+        document.getElementById('sos').onclick = () => {
+            const contacts = Array.from(document.querySelectorAll('.telegram-contact-input'))
+                .map(i => i.value.trim())
+                .filter(Boolean);
+
+            localStorage.setItem('sos_contacts', JSON.stringify(contacts));
+            const user = JSON.parse(localStorage.getItem('user_details') || '{}');
+
+            fetch('/trigger_sos', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ name: user.name, phone: user.phone, contacts }) 
+            })
+            .then(res => res.json())
+            .then(() => { 
+                const sosBtn = document.getElementById('sos'); 
+                sosBtn.style.background = '#28a745'; 
+                sosBtn.innerText = '✅ ALERT SENT'; 
+                sosBtn.disabled = true; 
+            })
+            .catch(err => alert('Failed to send SOS: ' + err));
+        };
+
+        function logout() {
+            localStorage.clear();
+            location.reload();
+        }
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}");
+        }
+    </script>
+</body>
+</html>
