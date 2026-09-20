@@ -9,7 +9,7 @@ load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-# Emergency Contact Telegram Chat IDs (comma added between items)
+# Emergency Contact Telegram Chat IDs
 EMERGENCY_CHAT_IDS = [
     "7522780948",
     "8644000785",
@@ -24,7 +24,14 @@ PROXIES = {
     'https': 'http://proxy.server:3128'
 }
 
+# Directory for storing ESP32-CAM photos
+UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'captures')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Shared memory state for hardware sync & dashboard live updates
 victim_location = {"lat": None, "lng": None}
+latest_capture_filename = None
+sos_active_state = False
 
 @app.route('/')
 def home():
@@ -64,8 +71,12 @@ def update_location():
 def get_location():
     return jsonify(victim_location)
 
+# Route triggered by both Web SOS button and Hardware Push Button
 @app.route('/trigger_sos', methods=['POST'])
 def trigger_sos():
+    global sos_active_state
+    sos_active_state = True
+
     data = request.get_json(silent=True) or {}
     victim_name = data.get('name', 'Victim')
     victim_phone = data.get('phone', 'Not Provided')
@@ -95,6 +106,41 @@ def trigger_sos():
         "status": "success",
         "telegram_sent_to": sent_count
     }), 200
+
+# Endpoint to upload attacker capture from ESP32-CAM
+@app.route('/upload_camera_frame', methods=['POST'])
+def upload_camera_frame():
+    global latest_capture_filename
+    if 'image' not in request.files:
+        return jsonify({"error": "No image file provided"}), 400
+
+    file = request.files['image']
+    filename = "latest_attacker.jpg"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(filepath)
+
+    latest_capture_filename = filename
+    return jsonify({
+        "status": "success",
+        "image_url": f"/static/captures/{filename}"
+    }), 200
+
+# Endpoint polled by dashboard.html every 2 seconds for live status & photo updates
+@app.route('/get_latest_status', methods=['GET'])
+def get_latest_status():
+    image_url = f"/static/captures/{latest_capture_filename}" if latest_capture_filename else None
+    return jsonify({
+        "sos_active": sos_active_state,
+        "image_url": image_url,
+        "location": victim_location
+    }), 200
+
+# Endpoint to reset SOS alert state
+@app.route('/reset_sos', methods=['POST'])
+def reset_sos():
+    global sos_active_state
+    sos_active_state = False
+    return jsonify({"status": "success", "message": "SOS state reset"}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
