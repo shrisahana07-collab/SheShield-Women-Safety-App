@@ -211,31 +211,30 @@
         // Update Google Maps Link Button
         const btn = document.getElementById('gmaps-btn');
         if (btn) {
-            btn.href = 'https://www.google.com/maps?q=' + lat + ',' + lng;
+            btn.href = `https://www.google.com/maps?q=${lat},${lng}`;
             btn.style.display = 'inline-block';
         }
     }
 
-    // 2. Fetch Live GPS from Mobile Browser
+    // 2. Transmit Device Geolocation to Server (without overriding display marker locally)
     if ("geolocation" in navigator) {
         navigator.geolocation.watchPosition(
             function(pos) {
                 const lat = pos.coords.latitude;
                 const lng = pos.coords.longitude;
-                updateMapMarker(lat, lng);
 
                 fetch('/update-location', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ lat: lat, lng: lng })
-                }).catch(err => console.error("Error updating location:", err));
+                }).catch(err => console.error("Error sending location:", err));
             },
             function(err) { console.warn("Location error:", err.message); },
             { enableHighAccuracy: true }
         );
     }
 
-    // 3. Poll Backend
+    // 3. Poll Backend State Every 2 Seconds
     function pollHardwareStatus() {
         fetch('/get_latest_status')
             .then(response => response.json())
