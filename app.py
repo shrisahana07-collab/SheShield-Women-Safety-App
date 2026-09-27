@@ -29,7 +29,7 @@ UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'captures')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Shared memory state for hardware sync & dashboard live updates
-victim_location = {"lat": None, "lng": None}
+victim_location = {"lat": 13.0827, "lng": 80.2707}  # Default coordinates (Chennai)
 latest_capture_filename = None
 sos_active_state = False
 
@@ -43,7 +43,7 @@ def send_telegram_photo(filepath):
     for chat_id in EMERGENCY_CHAT_IDS:
         try:
             with open(filepath, 'rb') as photo:
-                payload = {"chat_id": chat_id, "caption": "🚨 ATTACKER SNAPSHOT CAPTURED!"}
+                payload = {"chat_id": chat_id, "caption": "🚨 SHESHIELD: ATTACKER SNAPSHOT CAPTURED!"}
                 files = {"photo": photo}
                 requests.post(url, data=payload, files=files, proxies=PROXIES, timeout=10)
         except Exception as e:
@@ -79,8 +79,8 @@ def update_location():
     if data and 'lat' in data and 'lng' in data:
         victim_location['lat'] = float(data['lat'])
         victim_location['lng'] = float(data['lng'])
-        return jsonify({"status": "success"}), 200
-    return jsonify({"status": "error"}), 400
+        return jsonify({"status": "success", "location": victim_location}), 200
+    return jsonify({"status": "error", "message": "Invalid latitude/longitude"}), 400
 
 
 @app.route('/get-location', methods=['GET'])
@@ -126,18 +126,22 @@ def trigger_sos():
 
 @app.route('/upload_camera_frame', methods=['POST'])
 def upload_camera_frame():
-    global latest_capture_filename
-    if 'image' not in request.files:
+    global latest_capture_filename, sos_active_state
+    
+    # Check for flexible form field key names ('image', 'imageFile', or 'file')
+    file = request.files.get('image') or request.files.get('imageFile') or request.files.get('file')
+    
+    if not file or file.filename == '':
         return jsonify({"error": "No image file provided"}), 400
 
-    file = request.files['image']
     filename = "latest_attacker.jpg"
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     file.save(filepath)
 
     latest_capture_filename = filename
+    sos_active_state = True  # Automatically mark SOS as active when photo arrives
 
-    # Forward photo to Telegram chat IDs using PythonAnywhere Proxy
+    # Forward captured photo to Telegram contacts
     send_telegram_photo(filepath)
 
     return jsonify({
@@ -158,7 +162,7 @@ def get_latest_status():
 
 @app.route('/reset_sos', methods=['POST'])
 def reset_sos():
-    global sos_active_state
+    global sos_active_state, latest_capture_filename
     sos_active_state = False
     return jsonify({"status": "success", "message": "SOS state reset"}), 200
 
