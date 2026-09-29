@@ -39,11 +39,15 @@ def send_telegram_photo(filepath):
     if not TELEGRAM_BOT_TOKEN or not os.path.exists(filepath):
         return
 
+    # Build direct Google Maps link from current location
+    gmaps_link = f"https://www.google.com/maps?q={victim_location['lat']},{victim_location['lng']}"
+    caption_text = f"🚨 SHESHIELD: ATTACKER SNAPSHOT CAPTURED!\n📍 Location: {gmaps_link}"
+
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
     for chat_id in EMERGENCY_CHAT_IDS:
         try:
             with open(filepath, 'rb') as photo:
-                payload = {"chat_id": chat_id, "caption": "🚨 SHESHIELD: ATTACKER SNAPSHOT CAPTURED!"}
+                payload = {"chat_id": chat_id, "caption": caption_text}
                 files = {"photo": photo}
                 requests.post(url, data=payload, files=files, proxies=PROXIES, timeout=10)
         except Exception as e:
@@ -77,9 +81,12 @@ def update_location():
     global victim_location
     data = request.get_json(silent=True) or request.form
     if data and 'lat' in data and 'lng' in data:
-        victim_location['lat'] = float(data['lat'])
-        victim_location['lng'] = float(data['lng'])
-        return jsonify({"status": "success", "location": victim_location}), 200
+        try:
+            victim_location['lat'] = float(data['lat'])
+            victim_location['lng'] = float(data['lng'])
+            return jsonify({"status": "success", "location": victim_location}), 200
+        except ValueError:
+            return jsonify({"status": "error", "message": "Invalid coordinates"}), 400
     return jsonify({"status": "error", "message": "Invalid latitude/longitude"}), 400
 
 
@@ -98,7 +105,8 @@ def trigger_sos():
     victim_phone = data.get('phone', 'Not Provided')
 
     tracking_link = "https://shrisahana.pythonanywhere.com/dashboard"
-    message = f"🚨 SHESHIELD EMERGENCY SOS! 🚨\n\nUser: {victim_name}\nPhone: {victim_phone}\n\nLive Location Tracking:\n{tracking_link}"
+    gmaps_link = f"https://www.google.com/maps?q={victim_location['lat']},{victim_location['lng']}"
+    message = f"🚨 SHESHIELD EMERGENCY SOS! 🚨\n\nUser: {victim_name}\nPhone: {victim_phone}\n\n📍 Map Location:\n{gmaps_link}\n\n🖥️ Live Dashboard:\n{tracking_link}"
 
     sent_count = 0
     if TELEGRAM_BOT_TOKEN:
@@ -126,9 +134,19 @@ def trigger_sos():
 
 @app.route('/upload_camera_frame', methods=['POST'])
 def upload_camera_frame():
-    global latest_capture_filename, sos_active_state
+    global latest_capture_filename, sos_active_state, victim_location
     
-    # Check for flexible form field key names ('image', 'imageFile', or 'file')
+    # 1. Update location if lat and lng form fields are passed along with the image
+    lat = request.form.get('lat')
+    lng = request.form.get('lng')
+    if lat and lng:
+        try:
+            victim_location['lat'] = float(lat)
+            victim_location['lng'] = float(lng)
+        except ValueError:
+            pass
+
+    # 2. Check for flexible form field key names ('image', 'imageFile', or 'file')
     file = request.files.get('image') or request.files.get('imageFile') or request.files.get('file')
     
     if not file or file.filename == '':
@@ -141,7 +159,7 @@ def upload_camera_frame():
     latest_capture_filename = filename
     sos_active_state = True  # Automatically mark SOS as active when photo arrives
 
-    # Forward captured photo to Telegram contacts
+    # 3. Forward captured photo to Telegram contacts with Google Maps link
     send_telegram_photo(filepath)
 
     return jsonify({
@@ -162,7 +180,7 @@ def get_latest_status():
 
 @app.route('/reset_sos', methods=['POST'])
 def reset_sos():
-    global sos_active_state, latest_capture_filename
+    global sos_active_state
     sos_active_state = False
     return jsonify({"status": "success", "message": "SOS state reset"}), 200
 
