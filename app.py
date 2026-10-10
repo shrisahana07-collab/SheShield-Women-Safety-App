@@ -35,11 +35,10 @@ sos_active_state = False
 
 
 def send_telegram_photo(filepath):
-    """Utility to forward captured attacker photo to all emergency contacts via PA Proxy"""
+    """Utility to forward captured attacker photo to all emergency contacts"""
     if not TELEGRAM_BOT_TOKEN or not os.path.exists(filepath):
         return
 
-    # Build direct Google Maps link from current location
     gmaps_link = f"https://www.google.com/maps?q={victim_location['lat']},{victim_location['lng']}"
     caption_text = f"🚨 SHESHIELD: ATTACKER SNAPSHOT CAPTURED!\n📍 Location: {gmaps_link}"
 
@@ -49,7 +48,11 @@ def send_telegram_photo(filepath):
             with open(filepath, 'rb') as photo:
                 payload = {"chat_id": chat_id, "caption": caption_text}
                 files = {"photo": photo}
-                requests.post(url, data=payload, files=files, proxies=PROXIES, timeout=10)
+                # Try with proxy first, fallback to direct request if proxy fails
+                try:
+                    requests.post(url, data=payload, files=files, proxies=PROXIES, timeout=5)
+                except Exception:
+                    requests.post(url, data=payload, files=files, timeout=5)
         except Exception as e:
             print(f"Error sending photo to {chat_id}: {e}")
 
@@ -116,7 +119,12 @@ def trigger_sos():
                 "text": message
             }
             try:
-                response = requests.post(url, json=payload, proxies=PROXIES, timeout=10)
+                # Try with proxy first, fallback to direct request to prevent 1st-press failures
+                try:
+                    response = requests.post(url, json=payload, proxies=PROXIES, timeout=5)
+                except Exception:
+                    response = requests.post(url, json=payload, timeout=5)
+
                 if response.status_code == 200:
                     sent_count += 1
                 else:
