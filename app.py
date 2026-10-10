@@ -106,7 +106,7 @@ def trigger_sos():
 
     tracking_link = "https://shrisahana.pythonanywhere.com/dashboard"
     gmaps_link = f"https://www.google.com/maps?q={victim_location['lat']},{victim_location['lng']}"
-    message = f"🚨 SHESHIELD EMERGENCY SOS! 🚨\n\nUser: {victim_name}\nPhone: {victim_phone}\n\n📍 Map Location:\n{gmaps_link}\n\n🖥️ Live Dashboard:\n{tracking_link}"
+    message = f"🚨 SHESHIELD EMERGENCY SOS! 🚨\n\nUser: {user_name}\nPhone: {phone}\n\n💻 Live Dashboard:\nhttps://shrisahana.pythonanywhere.com/dashboard"
 
     sent_count = 0
     if TELEGRAM_BOT_TOKEN:
