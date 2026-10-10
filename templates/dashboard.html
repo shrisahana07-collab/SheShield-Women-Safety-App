@@ -82,9 +82,30 @@
         }
 
         #map {
-            height: 350px;
+            height: 320px;
             width: 100%;
             border-radius: 8px;
+        }
+
+        .map-actions {
+            margin-top: 10px;
+            text-align: right;
+        }
+
+        .btn-gmaps {
+            display: inline-block;
+            background-color: #4285F4;
+            color: white;
+            padding: 8px 14px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        .btn-gmaps:hover {
+            background-color: #3367D6;
         }
 
         .image-container {
@@ -156,6 +177,9 @@
         <div class="card">
             <h2>Live Victim Location</h2>
             <div id="map"></div>
+            <div class="map-actions">
+                <a id="gmapsLink" href="https://maps.google.com/?q=13.0827,80.2707" target="_blank" class="btn-gmaps">📍 View in Google Maps</a>
+            </div>
         </div>
 
         <!-- Camera Evidence Section -->
@@ -188,7 +212,32 @@
             .bindPopup('<b>Victim Location</b>')
             .openPopup();
 
-        // Function to update status, map position, and photo evidence
+        // 1. Automatically dip/track and push live phone GPS coordinates to backend
+        function startLiveLocationTracking() {
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(
+                    position => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+
+                        // Send coordinates to backend location endpoint
+                        fetch('/update-location', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ lat: lat, lng: lng })
+                        })
+                        .then(res => res.json())
+                        .catch(err => console.error("GPS sync error:", err));
+                    },
+                    error => console.error("Geolocation error:", error),
+                    { enableHighAccuracy: true, maximumAge: 5000, timeout: 5000 }
+                );
+            } else {
+                console.warn("Geolocation is not supported by this browser.");
+            }
+        }
+
+        // 2. Function to update status, map position, photo evidence, and Google Maps link
         function pollStatus() {
             fetch('/get_latest_status')
                 .then(response => response.json())
@@ -203,12 +252,15 @@
                         badge.classList.remove('active');
                     }
 
-                    // Update Map Location
+                    // Update Map Location and Google Maps button URL
                     if (data.location && data.location.lat && data.location.lng) {
                         const lat = data.location.lat;
                         const lng = data.location.lng;
                         marker.setLatLng([lat, lng]);
                         map.panTo([lat, lng]);
+
+                        // Dynamically update the "View in Google Maps" link
+                        document.getElementById('gmapsLink').href = `https://maps.google.com/?q=${lat},${lng}`;
                     }
 
                     // Update Camera Image Frame
@@ -242,6 +294,9 @@
             fetch('/reset_sos', { method: 'POST' })
                 .then(() => pollStatus());
         }
+
+        // Start live location tracking on load
+        startLiveLocationTracking();
 
         // Auto-poll status every 3 seconds
         setInterval(pollStatus, 3000);
